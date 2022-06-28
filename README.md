@@ -54,10 +54,8 @@ COPY license.txt /usr/local/freesurfer/.license
 ```
 Finally, build the container with
 ```bash
-docker build . -t <container_name>
+docker build . -t <licensed_image>
 ```
-
-In the instructions to follow replace `<licensed_image>` with your `<container_name>`
 
 ---
 
