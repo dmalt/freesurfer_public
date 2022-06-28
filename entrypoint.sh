@@ -10,6 +10,8 @@ echo "Starting with UID : $USER_ID"
 useradd --shell /bin/bash -u $USER_ID -o -c "" -m user
 export HOME=/home/user
 
+mv /usr/local/freesurfer/subjects /subjects
+export SUBJECTS_DIR="/subjects"
 chown -R user:user $SUBJECTS_DIR
 
 cp -r /code/* $HOME/

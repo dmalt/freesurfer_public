@@ -34,15 +34,8 @@ def task_fsf_recon_all():
     and 'recon_all_cmd' command-line variables must be set.
     For 'recon_all_cmd' options see FREESURFER recon-all documentation.
 
-    Unlike the recon-all command, this task doesn't fail if the target subject
-    directory exists. Instead, it does nothing for the ease of recomputing.
-
     """
-    return dict(
-        uptodate=[True],
-        actions=["recon-all -s {subject} {recon_all_cmd}".format(**config)],
-        targets=[os.environ["SUBJECTS_DIR"] + "/{subject}".format(**config)],
-    )
+    return dict(actions=["recon-all -s {subject} {recon_all_cmd}".format(**config)])
 
 
 def task_make_bem_surfaces():

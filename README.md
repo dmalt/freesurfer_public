@@ -1,20 +1,218 @@
-Docker container with freesurfer build + tools to work with anatomy files.
+Docker container with freesurfer + MNE Python for the source-analyses-ready cortical reconstruction.
 
 Based on the official [freesurfer image](https://hub.docker.com/r/freesurfer/freesurfer).
 
-Installed tools
----
-- [freesurfer](https://surfer.nmr.mgh.harvard.edu/)
-- [mne-python](https://mne.tools/0.23/index.html)
-- pydoit
-- nibabel
-- vtk
+The reason for being
+====================
+For my MEG/EEG research, I've been using Freesurfer for a single thing only: to
+get a cortical reconstruction from the MRI images for the source-level
+analyses, and the standard way of doing things, where you keep Freesurfer
+installed at all times and do a little internet study for the necessary options
+every time you need to run it didn't work out for me very well.
 
-Freesurfer license
----
-No license included. To add a license, create a new docker image.
-From a folder containing `license.txt`, run:
+Freesurfer is a powerful and somewhat overwhelming software toolbox. It has
+tons of commands and configuration options which are hard to remember and its
+installation is arguably quite a pain in the bottoms. At the same time, it consumes quite
+large amount of the hard-disk space for the tool that is needed only once in a
+while.
+
+The disk space problem can be resolved by using the [official Freesurfer
+container](https://hub.docker.com/r/freesurfer/freesurfer/) and removing it
+when no longer needed. However, the standard cortical reconstruction pipeline
+(the `recon-all` command) doesn't provide BEM and scalp surfaces required to
+perform MEG/EEG coregistration and source reconstruction.
+
+Moreover, the official Freesurfer image runs under `root`, which leads to all
+the created freesurfer folders being inaccessible without changing permissions.
+Not only this is inconvenient but also it requires sudo access to change the
+ownership, which in a case of running on a server might be unavailable.
+
+This container is an attempt to address all of the described issues.
+
+Quickstart
+==========
+To proceed, make sure [docker](https://docs.docker.com/get-docker/) is installed for your OS.
+
+Creating a licensed image
+-----------------
+Freesurfer software requires a license to run, which should be obtained on a per-user basis.
+This docker image is available publically and therefore doesn't include it.
+
+To use the pipeline, a derived container with the unique license file must be
+created first. For that,
+fill the freesurfer [registration form](https://surfer.nmr.mgh.harvard.edu/registration.html) and
+receive the license at the specified email address. For more details, see
+the [freesurfer documentation](https://surfer.nmr.mgh.harvard.edu/fswiki/License).
+
+
+After the license is acquired, create an empty folder and put the license
+there. Make sure its name matches `license.txt`. In the same folder, create a
+`Dockerfile` with the following contents:
 ```Dockerfile
 FROM dmalt/freesurfer_public:7.1.1
 COPY license.txt /usr/local/freesurfer/.license
+```
+Finally, build the container with
+```bash
+docker build . -t <container_name>
+```
+
+In the instructions to follow replace `<licensed_image>` with your `<container_name>`
+
+---
+
+Running the pipeline
+--------------------
+
+To test that everything works, run
+```bash
+docker run --rm <licensed_image>
+```
+You should see
+```bash
+Starting with UID : 9001
+.  fsf_recon_all
+```
+This will launch the reconstruction pipeline for Freesurfer's standard subject bert.
+Cortical reconstruction can take up to 20 hours to complete, so kill it with `ctrl-c`.
+
+The entrypoint to the container is set to `doit` command from
+[pydoit](https://pydoit.org/contents.html).
+Therefore, the container recognizes all the standard `doit` commands.
+
+To list the pipeline steps, run
+```bash
+$ docker run -rm <licensed_image> list
+
+fsf_recon_all         Perform cortical reconstruction using FREESURFER recon-all command
+make_bem_surfaces     Make BEM surfaces using watershed algorithm using MNE-Python
+make_scalp_surfaces   Make BEM scalp surfaces using MNE-Python
+```
+
+
+To run all three steps, use a command analogous to this one:
+```bash
+docker run --rm -e LOCAL_USER_ID=$(id -u) \
+    -v $(pwd)/derivatives/fsf/:/subjects -v $(pwd)/sub-01/anat:/anat \
+    <licensed_image> subject=sub-01 \
+    recon_all_cmd="-all -i /anat/sub-01_T1w.nii.gz -parallel -openmp 8"
+```
+
+For the explanation of what's going on here, continue reading.
+
+--rm flag
+--------
+By default, docker containers persist even after the execution is finished.
+In order to delete them automatically, we add the `--rm` flag:
+```bash
+docker run --rm ...
+```
+
+File permissions
+----------------
+Normally, there's no way for a container to know which user it's run from, and
+inside a container everything is run under a user specified in a Dockerfile,
+root by default. This is why all the files generated by docker inside the
+shared folders will have "broken" permission: they will be owned not by us, but
+by the user living inside docker.
+
+This container is built specifically to address the permissions issue via
+running the entrypoint script (see `entrypoint.sh`), which creates and sets a
+docker user with a specified `UID`. So, to avoid the ownership conflict, pass
+the current `UID` to the container via the `LOCAL_USER_ID` environment variable
+with
+```bash
+docker run -e LOCAL_USER_ID=$(id -u) ...
+```
+
+Mounting shared folders
+-----------------------
+By default, there's no way for the container to have an access to the files
+outside it. This means that all the files produced by the freesurfer pipeline
+will be lost after the container exits. Similarly, there's also no way for the
+pipeline to receive its input from outside the container.
+
+To enable the communication between the container and the outside world, we need
+to mount the shared folders. In the example from the quickstart we mount the Freesurfer
+subjects directory and the input folder --- the folder, where the MRI images are stored.
+This is done with the `-v` flag:
+
+```bash
+docker run --rm -e LOCAL_USER_ID=$(id -u) \
+    -v $(pwd)/derivatives/fsf/:/subjects -v $(pwd)/sub-01/anat:/anat ...
+```
+
+Doit pipeline options
+=====================
+
+fsf\_recon\_all
+-------------
+    Perform cortical reconstruction using FREESURFER recon-all command
+
+    The command being run is
+    $ recon-all -s {subject} {recon_all_cmd}
+
+
+    Examples
+    --------
+    Regular run:
+    >>> fsf_recon_all subject=sub-01 recon_all_cmd='-all -i /anat/sub-01_T1w.nii.gz'
+
+    Parallel run on 8 cores:
+    >>> fsf_recon_all subject=sub-01 recon_all_cmd='-all -i /anat/sub-01_T1w.nii.gz'\
+    -parallel -openmp 8
+
+
+    Notes
+    -----
+    In case no command-line variables are set, runs for default freesurfer
+    subject 'bert' for testing purposes. For a normal run 'subject'
+    and 'recon_all_cmd' command-line variables must be set.
+    For 'recon_all_cmd' options see FREESURFER recon-all documentation.
+
+For the full list of `recon-all` options, see the [Freesurfer
+documentation](https://surfer.nmr.mgh.harvard.edu/fswiki/recon-all)
+
+make\_bem\_surfaces
+-----------------
+
+    Make BEM surfaces using watershed algorithm using MNE-Python
+
+    The command being run is
+    $ mne watershed_bem -o -s {subject} --copy
+
+
+make\_scalp\_surfaces
+---------------------
+    Make BEM scalp surfaces using MNE-Python
+
+    The command being run is
+    $ mne make_scalp_surfaces -o -f -s {subject}
+
+
+Additional info
+===============
+
+Interactive run
+---------------
+To run the container interactively, execute:
+```bash
+docker run --rm -it --entrypoint "/bin/bash" <licensed_image>
+```
+
+Installed tools
+----
+
+- [freesurfer](https://surfer.nmr.mgh.harvard.edu/)
+- [mne-python](https://mne.tools/0.23/index.html)
+- [pydoit](https://pydoit.org/)
+- [nibabel](https://nipy.org/nibabel/)
+- [vtk](https://vtk.org/doc/nightly/html/md__builds_gitlab_kitware_sciviz_ci_Documentation_Doxygen_PythonWrappers.html)
+
+Build the container
+-------------------
+
+To build the container run
+```bash
+docker build . -t <licensed_image>
 ```
