@@ -57,7 +57,6 @@ Finally, build the container with
 docker build . -t <licensed_image>
 ```
 
----
 
 Running the pipeline
 --------------------
