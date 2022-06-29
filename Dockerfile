@@ -1,4 +1,5 @@
 FROM freesurfer/freesurfer:7.1.1
+RUN ln -s /usr/local/freesurfer/subjects /subjects
 RUN yum update -y
 RUN yum install -y python3 python3-pip
 RUN yum install unzip -y
