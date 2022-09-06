@@ -46,7 +46,7 @@ the [freesurfer documentation](https://surfer.nmr.mgh.harvard.edu/fswiki/License
 
 
 After the license is acquired, create an empty folder and put the license
-there. Make sure its name matches `license.txt`. In the same folder, create a
+there. Make sure its name matches `license.txt`. In the same folder, create a file named
 `Dockerfile` with the following contents:
 ```Dockerfile
 FROM dmalt/freesurfer_public:7.1.1
