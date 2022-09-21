@@ -79,7 +79,7 @@ Therefore, the container recognizes all the standard `doit` commands.
 
 To list the pipeline steps, run
 ```bash
-$ docker run -rm <licensed_image> list
+$ docker run --rm <licensed_image> list
 
 fsf_recon_all         Perform cortical reconstruction using FREESURFER recon-all command
 make_bem_surfaces     Make BEM surfaces using watershed algorithm using MNE-Python
